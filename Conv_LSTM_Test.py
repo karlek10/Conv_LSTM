@@ -75,22 +75,21 @@ class Meteo_MODIS_ds(Dataset):
     def __getitem__(self, index):
         ras_shape1, ras_shape2 = self.raster_data[:,1][0].shape # getting the raster shape 
         tabular_input = np.array(self.tabular_input).astype("float32") # selecting tabular trainign data
-        rasters = np.vstack(self.raster_data[:,1]).astype("float32").reshape(-1, ras_shape1, ras_shape2 ) # reshaping the raster 
+        rasters = torch.tensor(np.vstack(self.raster_data[:,1]).astype("float32").reshape(-1, ras_shape1, ras_shape2 )) # reshaping the raster            
         y =  np.array(self.y).astype("float32") # converting 
-        
-        
-        
-        
-        
-        # prepairing index + seq_len_in data
-        tabular_input = tabular_input[index : index + seq_len_in]
-        ras_data = rasters[index : index + seq_len_in]
-        y_data =y[index + seq_len_in -1: index + seq_len_in + seq_len_out-1]
-        
+        y_scaler = MinMaxScaler()
+        tab_scaler = MinMaxScaler()
+
+        tabular_scaled = tab_scaler.fit_transform(tabular_input) # rescaling [0, 1]
+        _ = y_scaler.fit_transform(y.reshape(-1,1)) # rescaling [0, 1]
+        rasters_scaled = rasters/rasters.unique().max() 
+        """Rasters are divided by largest unique value (label) in order to get labels
+        between 0 and 1 for faster training anf better results."""
+
         data = {
-            "raster": torch.tensor(ras_data),
+            "raster": rasters_scaled,
             "tabular_data": torch.tensor(tabular_input, dtype=torch.float32),
-            "runoff": torch.from_numpy(y_data),
+            "runoff": torch.from_numpy(y),
             }
         
         return data
@@ -112,9 +111,12 @@ hidden_size = 30                # number of hidden neurons
 num_layers = 2                  # number of LSTM layers
 seq_len_in = 5                # length of the training time series
 seq_len_out = 1                 # number of output step for predicted runoff
-# train_end = "2013-01-01"        # end date of training period
-# val_start = "2013-01-01"        # start date of validation period
-# test_start = "2014-01-01"       # testing period start date
+train_start = "2000-04-02"
+train_end = "2000-08-31"        # end date of training period
+val_start = "2000-09-01"        # start date of validation period
+val_end = "2000-11-30"
+test_start = "2000-12-01"       # testing period start date
+test_end = "2001-01-12"
 # =====================   
     
 train_data = Meteo_MODIS_ds(csv_path="input_data/Drava_data.csv",
@@ -139,11 +141,11 @@ print ("The legth of the dataloader is:", len(training_dataloader))
 if __name__ == "__main__":
     dataset = next(iter(training_dataloader))   
     # print ("y_data shape:", dataset["runoff"].shape)
-    # print ("tabular input data shape:", dataset["tabular_data"].shape)
-    # print ("raster data input shape:", dataset["raster"].shape)
+    print ("tabular input data shape:", dataset["tabular_data"].shape)
+    print ("raster data input shape:", dataset["raster"].shape)
     
        
     # print ("y_data shape:", dataset["runoff"])
     # print ("tabular input data shape:", dataset["tabular_data"])
-
+    print ("raster data input shape:", dataset["raster"][0][0])
         
