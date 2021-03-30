@@ -10,7 +10,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import torch
 import datetime
-
+from sklearn.preprocessing import MinMaxScaler
 
 
 
@@ -21,10 +21,10 @@ class Meteo_MODIS_ds(Dataset):
                  seq_len_in, 
                  seq_len_out, 
                  input_size,
-                 train_end = "2000-11-01", 
-                 val_start="2000-11-01", 
-                 test_start="2001-01-01",
-                 **kwargs):
+                 date_start=None,
+                 date_end = None,
+                 **kwargs,
+                 ):
         """
         Parameters
         ----------
@@ -32,27 +32,56 @@ class Meteo_MODIS_ds(Dataset):
         raster_path (string): path to the raster files
         is_valid (int): 1 for valid & 0 for training
         """        
-        self.tabular_data = pd.read_csv(csv_path)
+        self.tabular_data = pd.read_csv(csv_path, parse_dates=True,)
         self.tabular_input = self.tabular_data[self.tabular_data.columns[2:]]
-        self.dates = self.tabular_data[self.tabular_data.columns[0]].astype("datetime64[ns]")
+        self.dates = pd.to_datetime(self.tabular_data[self.tabular_data.columns[0]], format="%d/%m/%Y")
         self.raster_data = np.load(raster_path, allow_pickle=True)
         self.y = self.tabular_data[self.tabular_data.columns[1]] # observed runoff column
         self.seq_len_in = seq_len_in
         self.seq_len_out = seq_len_out
         self.input_size = input_size
-        
-        
-        print (self.dates.index)
 
+        if date_start != None: # chaning starting date, if provided
+            if pd.Timestamp(datetime.datetime.strptime(date_start, "%Y-%m-%d")) in (self.dates).values:
+                self.date_start = datetime.datetime.strptime(date_start, "%Y-%m-%d")
+                print ("Starting date is valid.\nStarting day set to {}."\
+                        .format(self.date_start.strftime('%d.%m.%Y')))
+            else:
+                raise Exception("The provided start date is not in range!")
+        else: # setting start date to first value in date
+            self.date_start = self.dates.iloc[0]
+            print ("Starting date was not provided.\nFirst day of dataset ({}) was set as starting date."\
+                    .format(self.date_start.strftime('%d.%m.%Y')))
+
+        if date_end != None: # chaning end date, if provided
+            if pd.Timestamp(datetime.datetime.strptime(date_end, "%Y-%m-%d")) in (self.dates).values:
+                self.date_end = datetime.datetime.strptime(date_end, "%Y-%m-%d")
+                print ("Ending date is valid.\nEnd day set to {}."\
+                        .format(self.date_end.strftime('%d.%m.%Y')))
+            else:
+                raise Exception("The provided end date is not in range!")
+        else: # setting end date to last value in date
+            self.date_end = self.dates.iloc[-1]
+            print ("Ending date was not provided.\nLast day of dataset ({}) was set as end date."\
+                    .format(self.date_end.strftime('%d.%m.%Y')))    
+
+        
+    
+    
+    
     def __len__(self):
         return self.dates.__len__() - (self.seq_len_in - 1)
 
-    
     def __getitem__(self, index):
         ras_shape1, ras_shape2 = self.raster_data[:,1][0].shape # getting the raster shape 
         tabular_input = np.array(self.tabular_input).astype("float32") # selecting tabular trainign data
         rasters = np.vstack(self.raster_data[:,1]).astype("float32").reshape(-1, ras_shape1, ras_shape2 ) # reshaping the raster 
         y =  np.array(self.y).astype("float32") # converting 
+        
+        
+        
+        
+        
         # prepairing index + seq_len_in data
         tabular_input = tabular_input[index : index + seq_len_in]
         ras_data = rasters[index : index + seq_len_in]
@@ -90,9 +119,13 @@ seq_len_out = 1                 # number of output step for predicted runoff
     
 train_data = Meteo_MODIS_ds(csv_path="input_data/Drava_data.csv",
                             raster_path="input_data/test_snow_data.npy",
+                            
                             seq_len_in = seq_len_in,
                             seq_len_out= seq_len_out,
-                            input_size = input_size,)
+                            input_size = input_size,
+                            date_start = "2000-04-02",
+                            date_end="2001-01-10"
+                            )
 
 training_dataloader = DataLoader(train_data,
                         batch_size=5,
@@ -105,12 +138,12 @@ print ("The legth of the dataloader is:", len(training_dataloader))
 
 if __name__ == "__main__":
     dataset = next(iter(training_dataloader))   
-    print ("y_data shape:", dataset["runoff"].shape)
-    print ("tabular input data shape:", dataset["tabular_data"].shape)
-    print ("raster data input shape:", dataset["raster"].shape)
+    # print ("y_data shape:", dataset["runoff"].shape)
+    # print ("tabular input data shape:", dataset["tabular_data"].shape)
+    # print ("raster data input shape:", dataset["raster"].shape)
     
        
-    print ("y_data shape:", dataset["runoff"])
-    print ("tabular input data shape:", dataset["tabular_data"])
+    # print ("y_data shape:", dataset["runoff"])
+    # print ("tabular input data shape:", dataset["tabular_data"])
 
         
