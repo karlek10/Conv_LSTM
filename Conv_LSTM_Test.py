@@ -190,7 +190,7 @@ if __name__ == "__main__":
     print ("raster data input shape:", dataset["raster"].shape)
     
        
-    print ("y_data shape:", dataset["runoff"])
-    print ("tabular input data shape:", dataset["tabular_data"])
-    print ("raster data input shape:", dataset["raster"])
+    # print ("y_data shape:", dataset["runoff"])
+    # print ("tabular input data shape:", dataset["tabular_data"])
+    # print ("raster data input shape:", dataset["raster"])
         
