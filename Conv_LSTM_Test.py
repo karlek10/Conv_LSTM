@@ -65,34 +65,44 @@ class Meteo_MODIS_ds(Dataset):
             print ("Ending date was not provided.\nLast day of dataset ({}) was set as end date."\
                     .format(self.date_end.strftime('%d.%m.%Y')))    
 
-        
+        self.start_idx = self.dates[self.dates == self.date_start].index[0]
+        self.end_idx = self.dates[self.dates == self.date_end].index[0]
     
-    
+        print (self.start_idx)
+        print (self.end_idx)
     
     def __len__(self):
         return self.dates.__len__() - (self.seq_len_in - 1)
 
     def __getitem__(self, index):
         ras_shape1, ras_shape2 = self.raster_data[:,1][0].shape # getting the raster shape 
-        tabular_input = np.array(self.tabular_input).astype("float32") # selecting tabular trainign data
-        rasters = torch.tensor(np.vstack(self.raster_data[:,1]).astype("float32").reshape(-1, ras_shape1, ras_shape2 )) # reshaping the raster            
-        y =  np.array(self.y).astype("float32") # converting 
+        
+        tabular_input = np.array(self.tabular_input).astype("float32")[self.start_idx:self.end_idx] # selecting tabular trainign data
+        rasters = torch.tensor(np.vstack(self.raster_data[:,1]).astype("float32").reshape(-1, ras_shape1, ras_shape2 ))[self.start_idx:self.end_idx] # reshaping the raster            
+        y =  np.array(self.y).astype("float32")[self.start_idx:self.end_idx][index + seq_len_in-1: index + seq_len_in + seq_len_out-1] # converting 
         y_scaler = MinMaxScaler()
         tab_scaler = MinMaxScaler()
 
-        tabular_scaled = tab_scaler.fit_transform(tabular_input) # rescaling [0, 1]
+        tabular_scaled = tab_scaler.fit_transform(tabular_input)[index : index + seq_len_in] # rescaling [0, 1]
         _ = y_scaler.fit_transform(y.reshape(-1,1)) # rescaling [0, 1]
-        rasters_scaled = rasters/rasters.unique().max() 
+        rasters_scaled = (rasters/rasters.unique().max())[index : index + seq_len_in]
         """Rasters are divided by largest unique value (label) in order to get labels
         between 0 and 1 for faster training anf better results."""
 
+
+
         data = {
             "raster": rasters_scaled,
-            "tabular_data": torch.tensor(tabular_input, dtype=torch.float32),
+            "tabular_data": torch.tensor(tabular_scaled, dtype=torch.float32),
             "runoff": torch.from_numpy(y),
             }
         
         return data
+
+
+
+
+
 
     # def train_val_dataset(dataset, val_split=0.25):
     #     train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=val_split)
@@ -105,7 +115,7 @@ class Meteo_MODIS_ds(Dataset):
 
     
  # ====== STATICS ======
-num_batches = 32                # how many timeserieses to be trained in one iteration
+batch_size = 10                # how many timeserieses to be trained in one iteration
 input_size = 9                  # number of features (stations) --> rain, temp, hum, etc. 
 hidden_size = 30                # number of hidden neurons
 num_layers = 2                  # number of LSTM layers
@@ -125,14 +135,42 @@ train_data = Meteo_MODIS_ds(csv_path="input_data/Drava_data.csv",
                             seq_len_in = seq_len_in,
                             seq_len_out= seq_len_out,
                             input_size = input_size,
-                            date_start = "2000-04-02",
-                            date_end="2001-01-10"
+                            date_start = train_start,
+                            date_end=train_end
                             )
 
 training_dataloader = DataLoader(train_data,
-                        batch_size=5,
+                        batch_size=batch_size,
                         drop_last=True,)
 print ("The legth of the dataloader is:", len(training_dataloader))
+
+valid_data = Meteo_MODIS_ds(csv_path="input_data/Drava_data.csv",
+                            raster_path="input_data/test_snow_data.npy",
+                            
+                            seq_len_in = seq_len_in,
+                            seq_len_out= seq_len_out,
+                            input_size = input_size,
+                            date_start = val_start,
+                            date_end=val_end
+                            )
+
+valid_dataloader = DataLoader(train_data,
+                        batch_size=batch_size,
+                        drop_last=True,)
+
+test_data = Meteo_MODIS_ds(csv_path="input_data/Drava_data.csv",
+                            raster_path="input_data/test_snow_data.npy",
+                            
+                            seq_len_in = seq_len_in,
+                            seq_len_out= seq_len_out,
+                            input_size = input_size,
+                            date_start = test_start,
+                            date_end=test_end
+                            )
+
+test_dataloader = DataLoader(train_data,
+                        batch_size=batch_size,
+                        drop_last=True,)
 
 
 
@@ -140,12 +178,12 @@ print ("The legth of the dataloader is:", len(training_dataloader))
 
 if __name__ == "__main__":
     dataset = next(iter(training_dataloader))   
-    # print ("y_data shape:", dataset["runoff"].shape)
+    print ("y_data shape:", dataset["runoff"].shape)
     print ("tabular input data shape:", dataset["tabular_data"].shape)
     print ("raster data input shape:", dataset["raster"].shape)
     
        
-    # print ("y_data shape:", dataset["runoff"])
-    # print ("tabular input data shape:", dataset["tabular_data"])
-    print ("raster data input shape:", dataset["raster"][0][0])
+    print ("y_data shape:", dataset["runoff"])
+    print ("tabular input data shape:", dataset["tabular_data"])
+    print ("raster data input shape:", dataset["raster"])
         
